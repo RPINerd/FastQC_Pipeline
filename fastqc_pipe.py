@@ -3,9 +3,10 @@ import os
 import subprocess
 import logging
 import argparse
+import multiprocessing
 from pathlib import Path
 
-# FastQC pipeline       |       RPINerd, 07/20/22
+# FastQC pipeline       |       RPINerd, 01/26/23
 # 
 # FastQC_pipe.py will take an input of run files and sequentially analyze them
 # with the fastqc tool. Input format is expected to be a tab-separated list 
@@ -21,105 +22,88 @@ from pathlib import Path
 
 
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
-def collect_reads(rootpath, readset, lanes, r_int):
+def collect_reads(rootpath, readset, lanes, readNumber):
 
     matches = []
-    read_match = readset + "_L00[1-" + lanes + "]_R" + r_int + "*.fastq*"
-
-    logging.debug("read_match: " + read_match)
+    #TODO can we just assume 4 lanes and just not append file if not found?
+    #- Assert a file is found
+    read_match = "{}_L00[1-{}]_R{}*.fastq*".format(readset, lanes, readNumber)
 
     for path in Path(rootpath).rglob(read_match):
         matches.append( str(path.resolve()).replace(" ", "\ ") )
 
-    logging.debug("matches: " + str(matches))
+    logging.debug("read_match:\t{}\nmatches:\t{}".format(read_match, matches))
+    
     return matches
 
 
 # Merge all the lanes individual files into a single fastq
-def merge_fastq(r_int, r_files, sample_id):
+def merge_fastq(readNumber, readFiles, sample_id):
 
-    # Convert list into string for execution
-    r_string = ' '.join(r_files)
+    r_string = ' '.join(readFiles)
 
-    # Concatenate lanes into single file
-    merge_name = sample_id + "_R" + r_int + ".fastq"
-    #TODO check if compressed or not
-    if r_string.endswith(".gz"):
-        cmd = "zcat " + r_string + " > " + merge_name
-    else:
-        cmd = "cat " + r_string + " > " + merge_name
+    merge_name = "{}_R{}.fastq".format(sample_id, readNumber)
+    
+    cat = "zcat" if r_string.find(".gz") else "cat"
+    cmd = "{} {} > {}".format(cat, r_string, merge_name)
 
-    logging.debug("merge_fastq\nr_string: " + r_string + "\nmerge_name: " + merge_name + "\ncmd: " + cmd + "\n")
+    logging.debug("merge_fastq\nr_string:\t{}\nmerge_name:\t{}\ncmd:\t{}\n".format(r_string, merge_name, cmd))
 
-    logging.info("Calling cat merge of Read " + str(r_int) + " files...")
+    logging.info("Merging R{} files...".format(readNumber))
     subprocess.run(cmd, shell=True)
     logging.info("Merge Complete!")
+    
     return merge_name
 
 
-# Just execute fastqc on given file
-def process_files(file_list, threads):
+def fastqc_files(file_list, threads):
 
-    # Join array of files into string
-    file_string = ' '.join(file_list)
-
-    # Execute FastQC analysis
     #TODO handle both compressed and uncompressed
-    fqc = "fastqc -t " + str(threads) + " " + file_string 
+    fqc = "fastqc -t {} {}".format(threads, ' '.join(file_list))
     subprocess.call(fqc, shell=True)
   
 
 def main(args):
 
-    # Open up provided runlist file
-    in_file = args.file
-    if not os.path.isfile(in_file):
-        logging.info('Error: input file does not exist!')
-        return
+    # Validate runlist file
+    assert os.path.isfile(args.file), 'Error: input file does not exist!'
     
     # Check for valid thread count
-    # TODO how to get max number of threads available on machine?
-    max_threads = 12
-    if args.threads > max_threads:
-        logging.info("Error: too many threads requested!")
-        return
-    else:
-        threads = args.threads
+    max_threads = multiprocessing.cpu_count()
+    threads = args.threads
+    assert threads <= max_threads, "Error: too many threads requested!"
 
     file_list = []
     # Parse input file, merge lanes, save reads into array for fastqc processing
-    for run in open(in_file).read().splitlines():
+    with open(args.file, "r") as in_file:
+        for line in in_file:
 
-        # Header line
-        # TODO for future standardization, should either use bool flag for first run or designate first row character
-        if run.startswith("#"):
-            logging.info("Header Line...Skipping\n")
-            continue
+            # Header line
+            if line.startswith("#"):
+                logging.info("Header Line...Skipping\n")
+                continue
 
-        cols = run.split('\t')
+            cols = line.split('\t')
 
-        path = cols[0]
-        sample_id = cols[1]
-        lanes = cols[2]
-        reads = cols[3]
+            path = cols[0]
+            sample_id = cols[1]
+            lanes = cols[2]
+            reads = cols[3]
 
-        logging.info("\n--Currently Processing--" \
-            + "\nSample: " + sample_id \
-            + "\nLanes: " + lanes \
-            + "\nPath: " + path \
-            + "\nReads: " + reads + "\n")
+            logging.info("\n--Currently Processing--\nSample:\t{}\nLanes:\t{}\nPath:\t{}\nReads:\t{}\n".format(sample_id, lanes, path, reads))
 
-        if reads.upper() == "BOTH":
-            for r in (1,2):
+            #TODO Must be a cleaner way..
+            if reads.upper() == "BOTH":
+                for r in (1,2):
 
-                r_file_list = collect_reads(path, sample_id, lanes, str(r))
-                file_list.append(merge_fastq(str(r), r_file_list, sample_id))
-        else:
-            r_file_list = collect_reads(path, sample_id, lanes, str(reads))
-            file_list.append(merge_fastq(str(reads), r_file_list, sample_id))
+                    r_file_list = collect_reads(path, sample_id, lanes, str(r))
+                    file_list.append(merge_fastq(str(r), r_file_list, sample_id))
+            else:
+                r_file_list = collect_reads(path, sample_id, lanes, str(reads))
+                file_list.append(merge_fastq(str(reads), r_file_list, sample_id))
 
     # Pass the list of merged files to fastqc for processing
-    process_files(file_list, threads)
+    fastqc_files(file_list, threads)
 
     # Cleanup intermediates/logging
     if not args.verbose:
@@ -132,6 +116,7 @@ if __name__ == "__main__":
 
     # Argument Parsing
     parser = argparse.ArgumentParser()
+    #TODO allow inferring of reads by just providing a target folder
     parser.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
     parser.add_argument("-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int)
     parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
