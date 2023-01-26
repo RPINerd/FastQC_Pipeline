@@ -1,26 +1,29 @@
 # FastQC Pipeline
+
 A straightforward program which can take a file list of fastq's, concatenate them, and perform QC on them in serial or scalable parallel
 
-
 ## Requirements
+
 Python - built on 3.9x but should be fine for the forseeable future  
 FastQC - the underlying tool to perform QC on your read files  
 Bash Environment - current mechanics rely on system calls to the bash command line  
 
-
 ## Input File
-FastQC Pipe expects a tab-delimited text file with the following structure:
 
-`Path/of/directory	|	Sample_Name	|	#_of_Lanes	|	R1/2/Both`
+FastQC Pipe expects a tab-delimited text file with the following structure (lines led with '#' are ignored):
 
-For example
-```
+`Path/of/directory | Sample_Name | #_of_Lanes | R1/2/Both`
+
+Example:
+
+```csv
 /home/RPINerd/M01234/Fastq_Generation Exp001_S1   4   2
 /home/RPINerd/M01234/Fastq_Generation Exp001_S2   4   1
 /home/RPINerd/M01234/Fastq_Generation Exp001_S3   4   Both
 ```
 
-## Running Pipe
+## Running Pipeline
+
 General format for run is `python3 fastqc_pipe.py -f file_list.tsv`
 
 The input file is the only required argument however there are some additional options:  
