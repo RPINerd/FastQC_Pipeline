@@ -44,7 +44,7 @@ def merge_fastq(r_int, r_files, sample_id):
     # Concatenate lanes into single file
     merge_name = sample_id + "_R" + r_int + ".fastq"
     #TODO check if compressed or not
-    if r_string.find("gz") > 0:
+    if r_string.endswith(".gz"):
         cmd = "zcat " + r_string + " > " + merge_name
     else:
         cmd = "cat " + r_string + " > " + merge_name
@@ -69,28 +69,7 @@ def process_files(file_list, threads):
     subprocess.call(fqc, shell=True)
   
 
-def main():
-
-    # Argument Parsing
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
-    parser.add_argument("-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int)
-    parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
-    parser.add_argument("-v", "--verbose", help="Outputs a lot more information for debugging and saves log", required=False, action='store_true')
-    args = parser.parse_args()
-
-    # Logging
-    if args.verbose:
-        logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "DEBUG", None))
-    else:
-        logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "INFO", None))
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(message)s')
-    handler.setFormatter(formatter)
-    root = logging.getLogger()
-    root.addHandler(handler)
-    logging.info('Logging started!')
+def main(args):
 
     # Open up provided runlist file
     in_file = args.file
@@ -150,5 +129,28 @@ def main():
             os.remove(file)
 
 if __name__ == "__main__":
-    main()
+
+    # Argument Parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
+    parser.add_argument("-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int)
+    parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
+    parser.add_argument("-v", "--verbose", help="Outputs a lot more information for debugging and saves log", required=False, action='store_true')
+    args = parser.parse_args()
+
+    # Logging Setup
+    if args.verbose:
+        logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "DEBUG", None))
+    else:
+        logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "INFO", None))
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(message)s')
+    handler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.addHandler(handler)
+    logging.info('Logging started!')
+
+    # Execute Pipeline
+    main(args)
     
