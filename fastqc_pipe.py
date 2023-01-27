@@ -6,35 +6,33 @@ import argparse
 import multiprocessing
 from pathlib import Path
 
-# FastQC pipeline       |       RPINerd, 01/26/23
+# FastQC pipeline       |       RPINerd, 01/27/23
 # 
 # FastQC_pipe.py will take an input of run files and sequentially analyze them
 # with the fastqc tool. Input format is expected to be a tab-separated list 
 # with the following columns:
 # 
-#   Path/of/directory   Sample_Name     #_of_Lanes  R1/2/Both
+#   Path/of/directory   Sample_Name     Read1/2/Both
 #
 # ex.
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S1   4   2
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S2   4   1
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S3   4   Both
+#   /home/RPINerd/M01234/Fastq_Generation Exp001_S1   2
+#   /home/RPINerd/M01234/Fastq_Generation Exp001_S2   1
+#   /home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
 
 
 
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
-def collect_reads(rootpath, readset, lanes, readNumber):
+def collect_reads(rootpath, readset, readNumber):
 
     matches = []
-    #TODO can we just assume 4 lanes and just not append file if not found?
-    #- Assert a file is found
-    read_match = "{}_L00[1-{}]_R{}*.fastq*".format(readset, lanes, readNumber)
+    read_match = "{}_L00[1-4]_R{}*.fastq*".format(readset, readNumber)
 
     for path in Path(rootpath).rglob(read_match):
         matches.append( str(path.resolve()).replace(" ", "\ ") )
 
     logging.debug("read_match:\t{}\nmatches:\t{}".format(read_match, matches))
     
-    return matches
+    return matches if len(matches) else -1
 
 
 # Merge all the lanes individual files into a single fastq
@@ -44,12 +42,12 @@ def merge_fastq(readNumber, readFiles, sample_id):
 
     merge_name = "{}_R{}.fastq".format(sample_id, readNumber)
     
-    cat = "zcat" if r_string.find(".gz") else "cat"
+    cat = "zcat" if r_string.find("gz") else "cat"
     cmd = "{} {} > {}".format(cat, r_string, merge_name)
 
     logging.debug("merge_fastq\nr_string:\t{}\nmerge_name:\t{}\ncmd:\t{}\n".format(r_string, merge_name, cmd))
 
-    logging.info("Merging R{} files...".format(readNumber))
+    logging.info("Merging R{} lanes...".format(readNumber))
     subprocess.run(cmd, shell=True)
     logging.info("Merge Complete!")
     
@@ -71,7 +69,7 @@ def main(args):
     # Check for valid thread count
     max_threads = multiprocessing.cpu_count()
     threads = args.threads
-    assert threads <= max_threads, "Error: too many threads requested!"
+    assert threads <= max_threads, "Error: too many threads requested! Maximum available on this machine is {}".format(max_threads)
 
     file_list = []
     # Parse input file, merge lanes, save reads into array for fastqc processing
@@ -83,24 +81,29 @@ def main(args):
                 logging.info("Header Line...Skipping\n")
                 continue
 
-            cols = line.split('\t')
+            cols = line.strip().split('\t')
 
             path = cols[0]
             sample_id = cols[1]
-            lanes = cols[2]
-            reads = cols[3]
+            reads = str(cols[2])
 
-            logging.info("\n--Currently Processing--\nSample:\t{}\nLanes:\t{}\nPath:\t{}\nReads:\t{}\n".format(sample_id, lanes, path, reads))
-
+            logging.info("\n--Currently Processing--\nSample:\t{}\nPath:\t{}\nReads:\t{}\n".format(sample_id, path, reads))
+            
             #TODO Must be a cleaner way..
-            if reads.upper() == "BOTH":
-                for r in (1,2):
+            if reads.lower() == "both":
+                for read in ['1', '2']:
+                    r_file_list = collect_reads(path, sample_id, read)
+                    if r_file_list == -1:
+                        logging.warning("No files were found for SampleID {}! Skipping.".format(sample_id))
+                        continue
+                    file_list.append(merge_fastq(read, r_file_list, sample_id))
 
-                    r_file_list = collect_reads(path, sample_id, lanes, str(r))
-                    file_list.append(merge_fastq(str(r), r_file_list, sample_id))
             else:
-                r_file_list = collect_reads(path, sample_id, lanes, str(reads))
-                file_list.append(merge_fastq(str(reads), r_file_list, sample_id))
+                r_file_list = collect_reads(path, sample_id, reads)
+                if r_file_list == -1:
+                    logging.warning("No files were found for SampleID {}! Skipping.".format(sample_id))
+                    continue
+                file_list.append(merge_fastq(reads, r_file_list, sample_id))
 
     # Pass the list of merged files to fastqc for processing
     fastqc_files(file_list, threads)

@@ -10,16 +10,19 @@ Bash Environment - current mechanics rely on system calls to the bash command li
 
 ## Input File
 
+File structure should follow the convention `SampleID_Lane#_Read#.fastq`. For example:
+Exp001_S1_L002_R1_001.fastq
+
 FastQC Pipe expects a tab-delimited text file with the following structure (lines led with '#' are ignored):
 
-`Path/of/directory | Sample_Name | #_of_Lanes | R1/2/Both`
+`Path/of/directory | Sample_Name | R1/2/Both`
 
 Example:
 
 ```csv
-/home/RPINerd/M01234/Fastq_Generation Exp001_S1   4   2
-/home/RPINerd/M01234/Fastq_Generation Exp001_S2   4   1
-/home/RPINerd/M01234/Fastq_Generation Exp001_S3   4   Both
+/home/RPINerd/M01234/Fastq_Generation Exp001_S1   2
+/home/RPINerd/M01234/Fastq_Generation Exp001_S2   1
+/home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
 ```
 
 ## Running Pipeline
