@@ -1,9 +1,9 @@
-import sys
+import argparse
+import logging
+import multiprocessing
 import os
 import subprocess
-import logging
-import argparse
-import multiprocessing
+import sys
 from pathlib import Path
 
 # FastQC pipeline       |       RPINerd, 01/27/23
@@ -42,7 +42,7 @@ def merge_fastq(readNumber, readFiles, sample_id):
 
     merge_name = "{}_R{}.fastq".format(sample_id, readNumber)
     
-    cat = "zcat" if r_string.find("gz") else "cat"
+    cat = "cat" if r_string.find("gz") == -1 else "zcat"
     cmd = "{} {} > {}".format(cat, r_string, merge_name)
 
     logging.debug("merge_fastq\nr_string:\t{}\nmerge_name:\t{}\ncmd:\t{}\n".format(r_string, merge_name, cmd))
@@ -65,6 +65,8 @@ def main(args):
 
     # Validate runlist file
     assert os.path.isfile(args.file), 'Error: input file does not exist!'
+    
+    #TODO Check for fastqc install?
     
     # Check for valid thread count
     max_threads = multiprocessing.cpu_count()
