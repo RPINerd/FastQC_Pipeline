@@ -121,7 +121,8 @@ if __name__ == "__main__":
 
     # Argument Parsing
     parser = argparse.ArgumentParser()
-    #TODO allow inferring of reads by just providing a target folder
+    # TODO allow inferring of reads by just providing a target folder
+    # TODO allow single input for R1/R2/Both that will apply to all reads
     parser.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
     parser.add_argument("-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int)
     parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
