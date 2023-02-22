@@ -4,8 +4,8 @@ A straightforward program which can take a file list of fastq's, concatenate the
 
 ## Requirements
 
-Python - built on 3.9x but should be fine for the forseeable future  
-FastQC - the underlying tool to perform QC on your read files  
+[Python](https://www.python.org/) - built on 3.9x but should be fine for the forseeable future  
+[FastQC](https://github.com/s-andrews/FastQC) - the underlying tool to perform QC on your read files  
 Bash Environment - current mechanics rely on system calls to the bash command line  
 
 ## Input File
