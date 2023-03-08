@@ -1,26 +1,23 @@
 import argparse
-import asyncio
 import logging
-import multiprocessing
 import os
 from pathlib import Path
 import subprocess
 import sys
 import time
 
-# FastQC pipeline       |       RPINerd, 01/27/23
-# 
-# FastQC_pipe.py will take an input of run files and sequentially analyze them
-# with the fastqc tool. Input format is expected to be a tab-separated list 
-# with the following columns:
-# 
-#   Path/of/directory   Sample_Name     Read1/2/Both
-#
-# ex.
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S1   2
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S2   1
-#   /home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
+'''
+    FastQC Pipeline | RPINerd, 03/08/23
 
+    FastQC_pipe.py will take an input of run files and analyze them with the fastqc tool in a quasi-parallel mode.
+    Input format is expected to be a tab-separated list with the following columns:
+
+    Path/of/directory   Sample_Name     Read1/2/Both
+
+    /home/RPINerd/M01234/Fastq_Generation Exp001_S1   2
+    /home/RPINerd/M01234/Fastq_Generation Exp001_S2   1
+    /home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
+  '''
 
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
 def collect_reads(rootpath, readset, readNumber):
@@ -31,8 +28,8 @@ def collect_reads(rootpath, readset, readNumber):
     for path in Path(rootpath).rglob(read_match):
         matches.append( str(path.resolve()).replace(" ", "\ ") )
 
-    logging.debug(f"read_match:\t{read_match}\nmatches:\t{matches}")
-    
+    logging.debug(f"read_match regex:\t{read_match}\nmatches:\t{matches}")
+
     return matches if len(matches) else -1
 
 
@@ -51,34 +48,26 @@ def merge_fastq(jobs):
         cat = "cat" if r_string.find("gz") == -1 else "zcat"
         cmd = f"{cat} {r_string} > {merge_name}"
 
-        # cmd = ["cat"] if r_string.find("gz") == -1 else ["zcat"]
-        # cmd.extend(readFiles)
-        # cmd.append(">")
-        # cmd.append(merge_name)
-        # print(cmd)
-
         logging.debug(f"merge_fastq\nr_string:\t{r_string}\nmerge_name:\t{merge_name}\ncmd:\t{cmd}\n")
+        logging.info(f"Launching merge for {sample_id} R{readNumber}...")
 
-        #logging.info(f"Merging {sample_id} R{readNumber} lanes...")
-        #processes.append(await asyncio.create_subprocess_shell(cmd))
         processes.append(subprocess.Popen(cmd, shell=True))
 
     still_running = True
     total_procs = len(processes)
-    
+
     while still_running:
-        
+
         time.sleep(2)
         status = 0
         for proc in processes:
             if proc.poll() is not None:
                 status += 1
-        
+
         print(f"Merge status: {round((status/total_procs)*100,2)}%", end="\r")
         still_running = True if status < total_procs else False
-        
-    logging.info("Merge status: 100%")
-    logging.info("Merge Completed!")
+
+    logging.info("Merge status: 100%\nMerge Completed!")
     return merge_names
 
 
@@ -115,7 +104,7 @@ def parse_input_file(file):
     logging.info(f"{len(merge_jobs)} total jobs created.")
 
     return merge_jobs
-    
+
 
 # Just a tiny caller to fastqc
 def fastqc_files(file_list, threads):
@@ -123,15 +112,14 @@ def fastqc_files(file_list, threads):
     #TODO handle both compressed and uncompressed
     files = ' '.join(file_list)
     fqc = f"fastqc -t {threads} {files}"
-    #fqc = ['fastqc', '-t', threads].extend(file_list)
     subprocess.call(fqc, shell=True)
-  
+
 
 def main(args):
-    
+
     # Parse input for merge jobs
     merge_jobs = parse_input_file(args.file)
-    
+
     # Merge all lanes into single file
     qc_jobs = merge_fastq(merge_jobs)
 
@@ -141,7 +129,7 @@ def main(args):
     # Cleanup intermediates/logging
     if not args.verbose:
         os.remove("fastqc_pipe.log")
-    if not args.merge:
+    if args.clean:
         for file in qc_jobs:
             os.remove(file)
 
@@ -150,11 +138,14 @@ if __name__ == "__main__":
 
     # Argument Parsing
     parser = argparse.ArgumentParser()
+    input_type = parser.add_argument_group()
     # TODO allow inferring of reads by just providing a target folder
-    # TODO allow single input for R1/R2/Both that will apply to all reads
-    parser.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
+    input_type.add_argument("-d", "--dir", help="Directory where all fastq files are stored", required=True)
+    input_type.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
     parser.add_argument("-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int)
     parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
+    parser.add_argument("-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action='store_true')
+    # TODO allow single input for R1/R2/Both that will apply to all reads
     #parser.add_argument("-r", "--reads", help="Choose whether to QC R1, R2 or both", choices=[1,2,""])
     parser.add_argument("-v", "--verbose", help="Outputs a lot more information for debugging and saves log", required=False, action='store_true')
     args = parser.parse_args()
@@ -173,14 +164,14 @@ if __name__ == "__main__":
     logging.info('Logging started!')
 
     # Check for valid thread count
-    max_threads = multiprocessing.cpu_count()
+    max_threads = len(os.sched_getaffinity(0))
     assert args.threads <= max_threads, f"Error: too many threads requested! Maximum available on this machine is {max_threads}"
 
     # Validate runlist file
     assert os.path.isfile(args.file), 'Error: input file does not exist!'
-    
-    #TODO Check for fastqc install?
+
+    # TODO Check for fastqc install
 
     # Execute Pipeline
     main(args)
-    
+
