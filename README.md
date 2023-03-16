@@ -1,10 +1,10 @@
 # FastQC Pipeline
 
-A straightforward program which can take a file list of fastq's, concatenate them, and perform QC on them in serial or scalable parallel
+A straightforward program which can take a file list of fastq's, concatenate them, and perform FastQC on them in serial or scalable parallel
 
 ## Requirements
 
-[Python](https://www.python.org/) - built on 3.9x but should be fine for the forseeable future  
+[Python](https://www.python.org/) - built on 3.10x but should be fine for the forseeable future  
 [FastQC](https://github.com/s-andrews/FastQC) - the underlying tool to perform QC on your read files  
 Bash Environment - current mechanics rely on system calls to the bash command line  
 
