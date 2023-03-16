@@ -20,6 +20,10 @@ import time
     /home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
   '''
 
+
+
+# --- Analysis --- #
+
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
 def collect_reads(rootpath, readset, readNumber):
 
@@ -32,7 +36,6 @@ def collect_reads(rootpath, readset, readNumber):
     logging.debug(f"read_match regex:\t{read_match}\nmatches:\t{matches}")
 
     return matches if len(matches) else -1
-
 
 # Merge all the lanes individual files into a single fastq
 def merge_fastq(jobs):
@@ -71,7 +74,6 @@ def merge_fastq(jobs):
     logging.info("Merge status: 100%\nMerge Completed!")
     return merge_names
 
-
 # Parse input file and collect all reads for each job
 def parse_input_file(file):
 
@@ -106,7 +108,6 @@ def parse_input_file(file):
 
     return merge_jobs
 
-
 # Just a tiny caller to fastqc
 def fastqc_files(file_list, threads):
 
@@ -116,26 +117,8 @@ def fastqc_files(file_list, threads):
     subprocess.call(fqc, shell=True)
 
 
-def main(args):
-
-    # Parse input for merge jobs
-    merge_jobs = parse_input_file(args.file)
-
-    # Merge all lanes into single file
-    qc_jobs = merge_fastq(merge_jobs)
-
-    # Pass the list of merged files to fastqc for processing
-    fastqc_files(qc_jobs, args.threads)
-
-    # Cleanup intermediates/logging
-    if not args.verbose:
-        os.remove("fastqc_pipe.log")
-    if args.clean:
-        for file in qc_jobs:
-            os.remove(file)
-
-
-if __name__ == "__main__":
+# --- Utility --- #
+def cli_parse():
 
     # Argument Parsing
     parser = argparse.ArgumentParser()
@@ -151,17 +134,45 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", help="Outputs a lot more information for debugging and saves log", required=False, action='store_true')
     args = parser.parse_args()
 
-    # Logging Setup
-    if args.verbose:
+    return args
+
+def setup_logging(verbose) -> None:
+
+    if verbose:
         logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "DEBUG", None))
     else:
         logging.basicConfig(encoding='utf-8', level=getattr(logging, "INFO", None))
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s - %(message)s")
     handler.setFormatter(formatter)
     root = logging.getLogger()
     root.addHandler(handler)
+
+
+# --- Drivers --- #
+def main(args):
+
+    # Parse input for merge jobs
+    merge_jobs = parse_input_file(args.file)
+
+    # Merge all lanes into single file
+    qc_jobs = merge_fastq(merge_jobs)
+
+    # Pass the list of merged files to fastqc for processing
+    fastqc_files(qc_jobs, args.threads)
+
+    # Cleanup intermediates/logging
+    if args.clean:
+        for file in qc_jobs:
+            os.remove(file)
+
+if __name__ == "__main__":
+
+    # Parse user arguments and spin up logging
+    args = cli_parse()
+    setup_logging(args.verbose)
     logging.info("Logging started!")
 
     # Check for valid thread count
