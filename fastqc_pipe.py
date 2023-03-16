@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -146,7 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--merge", help="If desired, specify a location to save the fastq files after lane merge", required=False, default=False)
     parser.add_argument("-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action='store_true')
     # TODO allow single input for R1/R2/Both that will apply to all reads
-    #parser.add_argument("-r", "--reads", help="Choose whether to QC R1, R2 or both", choices=[1,2,""])
+    #parser.add_argument("-r", "--reads", help="Choose whether to QC R1, R2 or both", required=False, choices=[1,2,""])
     parser.add_argument("-v", "--verbose", help="Outputs a lot more information for debugging and saves log", required=False, action='store_true')
     args = parser.parse_args()
 
@@ -154,23 +155,31 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "DEBUG", None))
     else:
-        logging.basicConfig(filename='fastqc_pipe.log', encoding='utf-8', level=getattr(logging, "INFO", None))
+        logging.basicConfig(encoding='utf-8', level=getattr(logging, "INFO", None))
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(message)s")
     handler.setFormatter(formatter)
     root = logging.getLogger()
     root.addHandler(handler)
-    logging.info('Logging started!')
+    logging.info("Logging started!")
 
     # Check for valid thread count
     max_threads = len(os.sched_getaffinity(0))
-    assert args.threads <= max_threads, f"Error: too many threads requested! Maximum available on this machine is {max_threads}"
+    logging.debug(f"Cores reported: {max_threads}")
+    assert args.threads <= max_threads, f"Error: Too many threads requested! Maximum available on this machine is {max_threads}"
 
     # Validate runlist file
-    assert os.path.isfile(args.file), 'Error: input file does not exist!'
+    assert os.path.isfile(args.file), f"Error: Input file ({args.file}) does not exist!"
 
-    # TODO Check for fastqc install
+    # Check for FastQC install
+    app = shutil.which("fastqc")
+    logging.debug(f"Shutil reports app as {app}")
+    if app != None:
+        try:
+            o = subprocess.check_output([app, '-h'],stderr= subprocess.STDOUT)
+        except:
+            raise "FastQC application was not found!"
 
     # Execute Pipeline
     main(args)
