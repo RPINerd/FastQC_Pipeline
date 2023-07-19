@@ -8,7 +8,7 @@ import sys
 import time
 
 '''
-    FastQC Pipeline | RPINerd, 03/08/23
+    FastQC Pipeline | RPINerd, 07/19/23
 
     FastQC_pipe.py will take an input of run files and analyze them with the fastqc tool in a quasi-parallel mode.
     Input format is expected to be a tab-separated list with the following columns:
@@ -51,6 +51,12 @@ def merge_fastq(jobs):
 
         cat = "cat" if r_string.find("gz") == -1 else "zcat"
         cmd = f"{cat} {r_string} > {merge_name}"
+
+        # cmd = ["cat"] if r_string.find("gz") == -1 else ["zcat"]
+        # cmd.extend(readFiles)
+        # cmd.append(">")
+        # cmd.append(merge_name)
+        # print(cmd)
 
         logging.debug(f"merge_fastq\nr_string:\t{r_string}\nmerge_name:\t{merge_name}\ncmd:\t{cmd}\n")
         logging.info(f"Launching merge for {sample_id} R{readNumber}...")
@@ -114,6 +120,7 @@ def fastqc_files(file_list, threads):
     #TODO handle both compressed and uncompressed
     files = ' '.join(file_list)
     fqc = f"fastqc -t {threads} {files}"
+    #fqc = ['fastqc', '-t', threads].extend(file_list)
     subprocess.call(fqc, shell=True)
 
 
@@ -194,4 +201,3 @@ if __name__ == "__main__":
 
     # Execute Pipeline
     main(args)
-
