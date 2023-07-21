@@ -49,32 +49,35 @@ def merge_fastq(jobs):
         merge_name = f"{sample_id}_R{readNumber}.fastq"
         merge_names.append(merge_name)
 
-        cat = "cat" if r_string.find("gz") == -1 else "zcat"
-        cmd = f"{cat} {r_string} > {merge_name}"
+        # cat = "cat" if r_string.find("gz") == -1 else "zcat"
+        # cmd = f"{cat} {r_string} > {merge_name}"
 
-        # cmd = ["cat"] if r_string.find("gz") == -1 else ["zcat"]
-        # cmd.extend(readFiles)
-        # cmd.append(">")
-        # cmd.append(merge_name)
-        # print(cmd)
+        cmd = ["cat"] if r_string.find("gz") == -1 else ["zcat"]
+        cmd.extend(readFiles)
+        cmd.append(">")
+        cmd.append(merge_name)
+        print(cmd)
 
         logging.debug(f"merge_fastq\nr_string:\t{r_string}\nmerge_name:\t{merge_name}\ncmd:\t{cmd}\n")
         logging.info(f"Launching merge for {sample_id} R{readNumber}...")
 
-        processes.append(subprocess.Popen(cmd, shell=True))
+        processes.append(subprocess.Popen(cmd, stdout=subprocess.PIPE))
 
     still_running = True
     total_procs = len(processes)
+    current_status = 0.00
 
     while still_running:
 
-        time.sleep(2)
+        time.sleep(5)
         status = 0
         for proc in processes:
             if proc.poll() is not None:
                 status += 1
-
-        print(f"Merge status: {round((status/total_procs)*100,2)}%", end="\r")
+        new_status = round((status/total_procs)*100,2)
+        if new_status != current_status:
+            print(f"Merge status: {new_status}%", end="\r")
+            current_status = new_status
         still_running = True if status < total_procs else False
 
     logging.info("Merge status: 100%\nMerge Completed!")
@@ -119,9 +122,9 @@ def fastqc_files(file_list, threads):
 
     #TODO handle both compressed and uncompressed
     files = ' '.join(file_list)
-    fqc = f"fastqc -t {threads} {files}"
-    #fqc = ['fastqc', '-t', threads].extend(file_list)
-    subprocess.call(fqc, shell=True)
+    #fqc = f"fastqc -t {threads} {files}"
+    fqc = ['fastqc', '-t', str(threads)].extend(file_list)
+    subprocess.run(fqc, stdout=subprocess.PIPE)
 
 
 # --- Utility --- #
@@ -195,7 +198,7 @@ if __name__ == "__main__":
     logging.debug(f"Shutil reports app as {app}")
     if app != None:
         try:
-            o = subprocess.check_output([app, '-h'],stderr= subprocess.STDOUT)
+            o = subprocess.check_output([app, '-h'], stderr= subprocess.STDOUT)
         except:
             raise "FastQC application was not found!"
 
