@@ -1,15 +1,13 @@
 """
-    FastQC Pipeline | RPINerd, 08/23/23
+    FastQC Pipeline | RPINerd, 09/08/23
 
     FastQC_pipe.py will take an input of run files and analyze them with the fastqc tool in a quasi-parallel mode.
-    Input format is expected to be a tab-separated list with the following columns:
+    Input format is expected to be a list with the just the read file IDs:
 
-    Path/of/directory   Sample_Name     Read1/2/Both
-
-    /home/RPINerd/M01234/Fastq_Generation Exp001_S1   2
-    /home/RPINerd/M01234/Fastq_Generation Exp001_S2   1
-    /home/RPINerd/M01234/Fastq_Generation Exp001_S3   Both
-  """
+    Exp001_S1
+    Exp001_S2
+    Exp001_S3
+"""
 
 import argparse
 import logging
@@ -28,11 +26,11 @@ def collect_reads(rootpath, readset, readNumber):
     read_match = f"{readset}_L00[1-4]_R{readNumber}*.fastq*"
 
     for path in Path(rootpath).rglob(read_match):
-        matches.append(str(path.resolve()).replace(" ", "\ "))
+        matches.append(str(path.resolve()).replace(" ", "\\ "))
 
     logging.debug(f"read_match regex:\t{read_match}\nmatches:\t{matches}")
 
-    return matches if len(matches) else -1
+    return matches
 
 
 # Merge all the lanes individual files into a single fastq
@@ -76,7 +74,7 @@ def merge_fastq(jobs):
 
 
 # Parse input file and collect all reads for each job
-def parse_input_file(file):
+def parse_input_file(dir, file):
     merge_jobs = []
     with open(file, "r") as runlist:
         logging.info("--Creating Merge Jobs--")
@@ -88,19 +86,18 @@ def parse_input_file(file):
 
             cols = line.strip().split("\t")
 
-            path = cols[0]
-            sample_id = cols[1]
-            reads = str(cols[2])
+            sample_id = cols[0]
+            reads = str(cols[1])
             reads = ["1", "2"] if reads.lower() == "both" else reads
 
             logging.info(f"Sample:\t{sample_id}\tReads:\t{reads}")
 
             for read in reads:
-                read_file_list = collect_reads(path, sample_id, read)
-                if read_file_list == -1:
+                read_file_list = collect_reads(dir, sample_id, read)
+                if read_file_list == []:
                     logging.warning(f"No files were found for SampleID {sample_id}! Skipping...")
-                    continue
-                merge_jobs.append([read, read_file_list, sample_id])
+                else:
+                    merge_jobs.append([read, read_file_list, sample_id])
 
     logging.info(f"{len(merge_jobs)} total jobs created.")
 
@@ -110,7 +107,6 @@ def parse_input_file(file):
 # Just a tiny caller to fastqc
 def fastqc_files(file_list, threads):
     # TODO handle both compressed and uncompressed
-    files = " ".join(file_list)
     fqc = ["fastqc", "-t", str(threads)].extend(file_list)
     subprocess.run(fqc, stdout=subprocess.PIPE)
 
@@ -164,9 +160,9 @@ def setup_logging(verbose) -> None:
 
 
 # --- Drivers --- #
-def main(args):
+def main(args) -> None:
     # Parse input for merge jobs
-    merge_jobs = parse_input_file(args.file)
+    merge_jobs = parse_input_file(args.dir, args.file)
 
     # Merge all lanes into single file
     qc_jobs = merge_fastq(merge_jobs)
@@ -202,7 +198,7 @@ if __name__ == "__main__":
     if app is not None:
         try:
             o = subprocess.check_output([app, "-h"], stderr=subprocess.STDOUT)
-        except:
+        except ChildProcessError:
             raise "FastQC application was not found!"
 
     # Execute Pipeline
