@@ -23,7 +23,54 @@ from pathlib import Path
 #! the future!
 
 
-# --- Analysis --- #
+def cli_parse():
+    parser = argparse.ArgumentParser()
+    input_type = parser.add_argument_group()
+    # TODO allow inferring of reads by just providing a target folder
+    input_type.add_argument("-d", "--dir", help="Directory where all fastq files are stored", required=True)
+    input_type.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
+    parser.add_argument(
+        "-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int
+    )
+    parser.add_argument(
+        "-m",
+        "--merge",
+        help="If desired, specify a location to save the fastq files after lane merge",
+        required=False,
+        default="",
+    )
+    parser.add_argument(
+        "-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action="store_true"
+    )
+    parser.add_argument(
+        "-r", "--reads", help="Choose whether to limit QC to only R1 or R2", required=False, choices=[1, 2], default=3
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Outputs a lot more information for debugging and saves log",
+        required=False,
+        action="store_true",
+    )
+    args = parser.parse_args()
+
+    return args
+
+
+def setup_logging(verbose) -> None:
+    if verbose:
+        logging.basicConfig(filename="fastqc_pipe.log", encoding="utf-8", level=getattr(logging, "DEBUG", None))
+    else:
+        logging.basicConfig(encoding="utf-8", level=getattr(logging, "INFO", None))
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter("%(asctime)s - %(message)s")
+    handler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.addHandler(handler)
+
+
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
 def collect_reads(rootpath, readset, readNumber):
     matches = []
@@ -112,62 +159,6 @@ def parse_input_file(args):
     return merge_jobs
 
 
-# Just a tiny caller to fastqc
-def fastqc_files(file_list, threads):
-    fqc = ["fastqc", "-t", str(threads)].extend(file_list)
-    subprocess.run(fqc, stdout=subprocess.PIPE)
-
-
-# --- Utility --- #
-def cli_parse():
-    parser = argparse.ArgumentParser()
-    input_type = parser.add_argument_group()
-    # TODO allow inferring of reads by just providing a target folder
-    input_type.add_argument("-d", "--dir", help="Directory where all fastq files are stored", required=True)
-    input_type.add_argument("-f", "--file", help="Your input *.tsv/*.csv with list of fastq files", required=True)
-    parser.add_argument(
-        "-t", "--threads", help="Number of simultaneous threads to run", required=False, default=4, type=int
-    )
-    parser.add_argument(
-        "-m",
-        "--merge",
-        help="If desired, specify a location to save the fastq files after lane merge",
-        required=False,
-        default="",
-    )
-    parser.add_argument(
-        "-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action="store_true"
-    )
-    parser.add_argument(
-        "-r", "--reads", help="Choose whether to limit QC to only R1 or R2", required=False, choices=[1, 2], default=3
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        help="Outputs a lot more information for debugging and saves log",
-        required=False,
-        action="store_true",
-    )
-    args = parser.parse_args()
-
-    return args
-
-
-def setup_logging(verbose) -> None:
-    if verbose:
-        logging.basicConfig(filename="fastqc_pipe.log", encoding="utf-8", level=getattr(logging, "DEBUG", None))
-    else:
-        logging.basicConfig(encoding="utf-8", level=getattr(logging, "INFO", None))
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter("%(asctime)s - %(message)s")
-    handler.setFormatter(formatter)
-    root = logging.getLogger()
-    root.addHandler(handler)
-
-
-# --- Drivers --- #
 def main(args) -> None:
     # Parse input for merge jobs
     merge_jobs = parse_input_file(args)
@@ -176,7 +167,10 @@ def main(args) -> None:
     qc_jobs = merge_fastq(merge_jobs, args.merge)
 
     # Pass the list of merged files to fastqc for processing
-    fastqc_files(qc_jobs, args.threads)
+    fqc = ["fastqc", "-t", str(args.threads)]
+    fqc.extend(qc_jobs)
+    logging.debug(f"FastQC Command: {fqc}")
+    subprocess.run(fqc, stdout=subprocess.PIPE)
 
     # Cleanup intermediates/logging
     if args.clean:
