@@ -14,7 +14,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -81,16 +80,21 @@ def cli_parse() -> argparse.ArgumentParser:
 
 def setup_logging(verbose) -> None:
     if verbose:
-        logging.basicConfig(filename="fastqc_pipe.log", encoding="utf-8", level=getattr(logging, "DEBUG", None))
+        logging.basicConfig(
+            filename="fastqc_pipe.log",
+            filemode="a",
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            encoding="utf-8",
+            datefmt="%H:%M:%S",
+            level=logging.DEBUG,
+        )
     else:
-        logging.basicConfig(encoding="utf-8", level=getattr(logging, "INFO", None))
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter("%(asctime)s - %(message)s")
-    handler.setFormatter(formatter)
-    root = logging.getLogger()
-    root.addHandler(handler)
+        logging.basicConfig(
+            format="%(asctime)s - %(message)s",
+            encoding="utf-8",
+            datefmt="%M:%S",
+            level=logging.INFO,
+        )
 
 
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
@@ -148,7 +152,7 @@ def parse_input_file(args):
             sample_id = line.strip()
             reads = ["1", "2"] if args.reads == 3 else args.reads
 
-            logging.info(f"Sample:\t{sample_id}\tReads:\t{reads}")
+            logging.debug(f"Sample:\t{sample_id}\tReads:\t{reads}")
 
             for read in reads:
                 read_file_list = collect_reads(args.dir, sample_id, read)
