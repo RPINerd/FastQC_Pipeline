@@ -74,9 +74,9 @@ def merge_fastq(jobs):
 
 
 # Parse input file and collect all reads for each job
-def parse_input_file(dir, file):
+def parse_input_file(args):
     merge_jobs = []
-    with open(file, "r") as runlist:
+    with open(args.file, "r") as runlist:
         logging.info("--Creating Merge Jobs--")
         for line in runlist:
             # Header line
@@ -84,16 +84,13 @@ def parse_input_file(dir, file):
                 logging.info("Header Line...Skipping\n")
                 continue
 
-            cols = line.strip().split("\t")
-
-            sample_id = cols[0]
-            reads = str(cols[1])
-            reads = ["1", "2"] if reads.lower() == "both" else reads
+            sample_id = line.strip()
+            reads = ["1", "2"] if args.reads == 3 else args.reads
 
             logging.info(f"Sample:\t{sample_id}\tReads:\t{reads}")
 
             for read in reads:
-                read_file_list = collect_reads(dir, sample_id, read)
+                read_file_list = collect_reads(args.dir, sample_id, read)
                 if read_file_list == []:
                     logging.warning(f"No files were found for SampleID {sample_id}! Skipping...")
                 else:
@@ -131,8 +128,9 @@ def cli_parse():
     parser.add_argument(
         "-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action="store_true"
     )
-    # TODO allow single input for R1/R2/Both that will apply to all reads
-    # parser.add_argument("-r", "--reads", help="Choose whether to QC R1, R2 or both", required=False, choices=[1,2,""])
+    parser.add_argument(
+        "-r", "--reads", help="Choose whether to limit QC to only R1 or R2", required=False, choices=[1, 2], default=3
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -162,7 +160,7 @@ def setup_logging(verbose) -> None:
 # --- Drivers --- #
 def main(args) -> None:
     # Parse input for merge jobs
-    merge_jobs = parse_input_file(args.dir, args.file)
+    merge_jobs = parse_input_file(args)
 
     # Merge all lanes into single file
     qc_jobs = merge_fastq(merge_jobs)
