@@ -41,9 +41,11 @@ def merge_fastq(jobs):
         readNumber, readFiles, sample_id = job
         r_string = " ".join(readFiles)
         merge_name = f"{sample_id}_R{readNumber}.fastq"
+        if r_string.find("gz"):
+            merge_name += ".gz"
         merge_names.append(merge_name)
 
-        cmd = ["cat"] if r_string.find("gz") == -1 else ["zcat"]
+        cmd = ["cat"]
         cmd.extend(readFiles)
         cmd.append(">")
         cmd.append(merge_name)
@@ -103,7 +105,6 @@ def parse_input_file(args):
 
 # Just a tiny caller to fastqc
 def fastqc_files(file_list, threads):
-    # TODO handle both compressed and uncompressed
     fqc = ["fastqc", "-t", str(threads)].extend(file_list)
     subprocess.run(fqc, stdout=subprocess.PIPE)
 
