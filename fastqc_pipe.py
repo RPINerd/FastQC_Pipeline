@@ -18,6 +18,10 @@ import sys
 import time
 from pathlib import Path
 
+#! Critical potential issue, if the order of lanes is ever inconsistent, everything breaks. Currently it
+#! outputs a list in the order L004, L002, L003, L001, need to force order here to prevent headaches in
+#! the future!
+
 
 # --- Analysis --- #
 # Sub to hunt down red oct.. I mean all the individual lane files for each readset
@@ -34,44 +38,49 @@ def collect_reads(rootpath, readset, readNumber):
 
 
 # Merge all the lanes individual files into a single fastq
-def merge_fastq(jobs):
+def merge_fastq(jobs, merge_dir):
     merge_names = []
     processes = []
     for job in jobs:
         readNumber, readFiles, sample_id = job
         r_string = " ".join(readFiles)
-        merge_name = f"{sample_id}_R{readNumber}.fastq"
+        merge_name = f"{merge_dir}/{sample_id}_R{readNumber}.fastq"
         if r_string.find("gz"):
             merge_name += ".gz"
         merge_names.append(merge_name)
 
-        cmd = ["cat"]
-        cmd.extend(readFiles)
-        cmd.append(">")
-        cmd.append(merge_name)
+        # cmd = ["cat"]
+        # cmd.extend(readFiles)
+        # cmd.append(" > ")
+        # cmd.append(merge_name)
 
-        logging.debug(f"merge_fastq\nr_string:\t{r_string}\nmerge_name:\t{merge_name}\ncmd:\t{cmd}\n")
+        logging.debug(f"merge_fastq\nr_string:\t{r_string}\nmerge_name:\t{merge_name}\n")
         logging.info(f"Launching merge for {sample_id} R{readNumber}...")
 
-        processes.append(subprocess.Popen(cmd, stdout=subprocess.PIPE))
+        with open(merge_name, "wb") as concat:
+            for file in readFiles:
+                shutil.copyfileobj(open(file, "rb"), concat)
+        # processes.append(subprocess.Popen(cmd, stdout=subprocess.PIPE))
 
-    still_running = True
-    total_procs = len(processes)
-    current_status = 0.00
+    # still_running = True
+    # total_procs = len(processes)
+    # current_status = 0.00
 
-    while still_running:
-        time.sleep(5)
-        status = 0
-        for proc in processes:
-            if proc.poll() is not None:
-                status += 1
-        new_status = round((status / total_procs) * 100, 2)
-        if new_status != current_status:
-            print(f"Merge status: {new_status}%", end="\r")
-            current_status = new_status
-        still_running = True if status < total_procs else False
+    # while still_running:
+    #     time.sleep(5)
+    #     completed_procs = 0
+    #     for proc in processes:
+    #         logging.debug(proc.communicate())
+    #         if proc.poll() is not None:
+    #             completed_procs += 1
+    #     new_status = round((completed_procs / total_procs) * 100, 2)
+    #     if new_status != current_status:
+    #         print(f"Merge status: {new_status}%", end="\r")
+    #         current_status = new_status
+    #     still_running = True if completed_procs < total_procs else False
 
     logging.info("Merge status: 100%\nMerge Completed!")
+    logging.debug(f"Merge files final: {merge_names}")
     return merge_names
 
 
@@ -124,7 +133,7 @@ def cli_parse():
         "--merge",
         help="If desired, specify a location to save the fastq files after lane merge",
         required=False,
-        default=False,
+        default="",
     )
     parser.add_argument(
         "-c", "--clean", help="After run, clean up the merge files from the disk", required=False, action="store_true"
@@ -164,7 +173,7 @@ def main(args) -> None:
     merge_jobs = parse_input_file(args)
 
     # Merge all lanes into single file
-    qc_jobs = merge_fastq(merge_jobs)
+    qc_jobs = merge_fastq(merge_jobs, args.merge)
 
     # Pass the list of merged files to fastqc for processing
     fastqc_files(qc_jobs, args.threads)
@@ -190,6 +199,10 @@ if __name__ == "__main__":
 
     # Validate runlist file
     assert os.path.isfile(args.file), f"Error: Input file ({args.file}) does not exist!"
+
+    # Create the desired merge directory if needed
+    if args.merge:
+        Path(args.merge).mkdir(parents=True, exist_ok=True)
 
     # Check for FastQC install
     app = shutil.which("fastqc")
