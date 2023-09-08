@@ -17,10 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-#! Critical potential issue, if the order of lanes is ever inconsistent, everything breaks. Currently it
-#! outputs a list in the order L004, L002, L003, L001, need to force order here to prevent headaches in
-#! the future!
-
 
 def cli_parse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -104,9 +100,9 @@ def collect_reads(rootpath, readset, readNumber):
 
     for path in Path(rootpath).rglob(read_match):
         matches.append(str(path.resolve()).replace(" ", "\\ "))
+    matches.sort()
 
     logging.debug(f"read_match regex:\t{read_match}\nmatches:\t{matches}")
-
     return matches
 
 
@@ -130,7 +126,7 @@ def merge_fastq(jobs, merge_dir):
         with open(merge_name, "wb") as concat:
             for file in readFiles:
                 shutil.copyfileobj(open(file, "rb"), concat)
-                logging.info(f"Merge: {file} -> {merge_name}")
+                logging.info(f"Merge: {str(file).split('/')[-1]} -> {merge_name}")
         logging.info(f"Done {merge_name}")
 
     logging.info("Lane Files Merge Completed!")
