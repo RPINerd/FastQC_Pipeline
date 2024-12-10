@@ -1,5 +1,5 @@
 """
-    FastQC Pipeline | RPINerd, 09/08/23
+    FastQC Pipeline | RPINerd, 12/09/24
 
     FastQC_pipe.py will take an input of run files and analyze them with the fastqc tool in a quasi-parallel mode.
     Input format is expected to be a list with the just the read file IDs:
@@ -17,7 +17,8 @@ import subprocess
 from pathlib import Path
 
 
-def cli_parse() -> argparse.ArgumentParser:
+def arg_parser() -> argparse.Namespace:
+    """Parse command line arguments"""
     parser = argparse.ArgumentParser()
 
     # TODO allow inferring of reads by just providing a target folder
@@ -73,12 +74,20 @@ def cli_parse() -> argparse.ArgumentParser:
         required=False,
         action="store_true",
     )
-    args = parser.parse_args()
 
-    return args
+    return parser.parse_args()
 
 
-def setup_logging(verbose) -> None:
+def setup_logging(verbose: bool) -> None:
+    """
+    Setup logging for the script
+
+    Args:
+        verbose (bool): If True, log all the things
+
+    Returns:
+        None
+    """
     if verbose:
         logging.basicConfig(
             filename="fastqc_pipe.log",
@@ -97,10 +106,20 @@ def setup_logging(verbose) -> None:
         )
 
 
-# Sub to hunt down red oct.. I mean all the individual lane files for each readset
-def collect_reads(rootpath, readset, readNumber):
+def collect_reads(rootpath: str, readset: str, read_number: str) -> list:
+    """
+    Sub to hunt down red oct.. I mean all the individual lane files for each readset
+
+    Args:
+        rootpath (str): Root directory to search for files
+        readset (str): Sample ID to search for
+        read_number (str): Read number to search for
+
+    Returns:
+        matches (list): List of all files found matching the readset and read_number
+    """
     matches = []
-    read_match = f"{readset}_L00[1-4]_R{readNumber}*.fastq*"
+    read_match = f"{readset}_L00[1-4]_R{read_number}*.fastq*"
 
     for path in Path(rootpath).rglob(read_match):
         matches.append(str(path.resolve()).replace(" ", "\\ "))
@@ -110,26 +129,35 @@ def collect_reads(rootpath, readset, readNumber):
     return matches
 
 
-# Merge all the lanes individual files into a single fastq
-def merge_fastq(jobs, merge_dir):
+def merge_fastq(jobs: list[tuple], merge_dir: str) -> list:
+    """
+    Merge all the lanes individual files into a single fastq
+
+    Args:
+        jobs (list): List of jobs to merge
+        merge_dir (str): Directory to save the merged files
+
+    Returns:
+        merge_names (list): List of all the merged files
+    """
     logging.info("Beginning Lane Files Merge...")
     merge_names = []
     for job in jobs:
-        readNumber, readFiles, sample_id = job
-        r_string = " ".join(readFiles)
-        merge_name = f"{sample_id}_R{readNumber}.fastq"
-        if merge_dir != "":
+        read_number, read_files, sample_id = job
+        r_string = " ".join(read_files)
+        merge_name = f"{sample_id}_R{read_number}.fastq"
+        if merge_dir:
             merge_name = merge_dir + "/" + merge_name
         if r_string.find("gz"):
             merge_name += ".gz"
         merge_names.append(merge_name)
 
-        logging.info(f"Merging {sample_id} R{readNumber}...")
+        logging.info(f"Merging {sample_id} R{read_number}...")
 
         # TODO must test and handle non-zipped fastq files
-        with open(merge_name, "wb") as concat:
-            for file in readFiles:
-                shutil.copyfileobj(open(file, "rb"), concat)
+        with Path.open(merge_name, "wb") as concat:
+            for file in read_files:
+                shutil.copyfileobj(Path.open(file, "rb"), concat)
                 logging.info(f"Merge: {str(file).split('/')[-1]} -> {merge_name}")
         logging.info(f"Done {merge_name}")
 
@@ -138,10 +166,18 @@ def merge_fastq(jobs, merge_dir):
     return merge_names
 
 
-# Parse input file and collect all reads for each job
-def parse_input_file(args):
+def parse_input_file(args: argparse.Namespace) -> list:
+    """
+    Parse input file and collect all reads for each job
+
+    Args:
+        args (argparse.Namespace): Parsed arguments from the user
+
+    Returns:
+        merge_jobs (list): List of all jobs to be merged
+    """
     merge_jobs = []
-    with open(args.file, "r") as runlist:
+    with Path.open(args.file) as runlist:
         logging.info("Parsing sample list...")
         for line in runlist:
             # Header line
@@ -166,7 +202,8 @@ def parse_input_file(args):
     return merge_jobs
 
 
-def main(args) -> None:
+def main(args: argparse.Namespace) -> None:
+    """Main function to run the FastQC pipeline"""
     # Parse input for merge jobs
     merge_jobs = parse_input_file(args)
 
@@ -183,22 +220,22 @@ def main(args) -> None:
     fqc = ["fastqc", "-t", str(threads)]
     fqc.extend(qc_jobs)
     logging.debug(f"FastQC Command: {fqc}")
-    subprocess.run(fqc, stdout=subprocess.PIPE)
+    subprocess.run(fqc, stdout=subprocess.PIPE, check=False)
 
     # Cleanup intermediates/logging
     if args.clean:
         for file in qc_jobs:
-            os.remove(file)
+            Path.unlink(file)
 
 
 if __name__ == "__main__":
     # Parse user arguments and spin up logging
-    args = cli_parse()
+    args = arg_parser()
     setup_logging(args.verbose)
     logging.info("Logging started!")
 
     # Validate runlist file
-    assert os.path.isfile(args.file), f"Error: Input file ({args.file}) does not exist!"
+    assert Path.is_file(args.file), f"Error: Input file ({args.file}) does not exist!"
 
     # Check for valid thread count
     max_threads = len(os.sched_getaffinity(0))
