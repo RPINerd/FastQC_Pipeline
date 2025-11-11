@@ -155,7 +155,8 @@ def merge_fastq(jobs: list[tuple], merge_dir: str) -> list:
         logging.info(f"Merging {sample_id} R{read_number}...")
 
         # TODO must test and handle non-zipped fastq files
-        with Path.open(merge_name, "wb") as concat:
+        merge_file = Path(merge_name)
+        with merge_file.open("wb") as concat:
             for file in read_files:
                 shutil.copyfileobj(Path.open(file, "rb"), concat)
                 logging.info(f"Merge: {str(file).split('/')[-1]} -> {merge_name}")
@@ -254,7 +255,7 @@ if __name__ == "__main__":
         try:
             o = subprocess.check_output([app, "-h"], stderr=subprocess.STDOUT)
         except ChildProcessError:
-            raise "FastQC application was not found!"
+            raise ChildProcessError("FastQC application was not found!")
 
     # Execute Pipeline
     main(args)
