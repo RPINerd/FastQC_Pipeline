@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 
@@ -78,7 +79,7 @@ def arg_parser() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setup_logging(verbose: bool) -> None:
+def init_logging(verbose: bool) -> None:
     """
     Setup logging for the script
 
@@ -89,21 +90,23 @@ def setup_logging(verbose: bool) -> None:
         None
     """
     if verbose:
-        logging.basicConfig(
-            filename="fastqc_pipe.log",
-            filemode="a",
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            encoding="utf-8",
-            datefmt="%H:%M:%S",
-            level=logging.DEBUG,
-        )
+        log_file = f"fastqc_pipe_debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_level = logging.DEBUG
+        log_format = ("%(asctime)s | %(levelname)-7s | %(lineno)-4d | "
+        "%(message)s")
     else:
-        logging.basicConfig(
-            format="%(asctime)s - %(message)s",
-            encoding="utf-8",
-            datefmt="%M:%S",
-            level=logging.INFO,
-        )
+        log_file = f"fastqc_pipe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_level = logging.INFO
+        log_format = "%(asctime)s - %(message)s"
+
+    logging.basicConfig(
+    level=log_level,
+    format=log_format,
+    datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(log_file, mode="a")
+    ])
 
 
 def collect_reads(rootpath: str, readset: str, read_number: str) -> list:
@@ -232,7 +235,7 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     # Parse user arguments and spin up logging
     args = arg_parser()
-    setup_logging(args.verbose)
+    init_logging(args.verbose)
     logging.info("Logging started!")
 
     # Validate runlist file
